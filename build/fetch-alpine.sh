@@ -6,7 +6,7 @@ OUT="$HERE/alpine-rootfs"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-docker run --rm -v "$OUT:/out" alpine:3.21 sh -eux -c '
+docker run --rm --platform linux/arm64 -v "$OUT:/out" alpine:3.21 sh -eux -c '
 	apk add --no-cache \
 		curl rsync jq sqlite openssl bind-tools zip bash zsh htop nano vim \
 		openssh-client ncurses-terminfo-base ca-certificates

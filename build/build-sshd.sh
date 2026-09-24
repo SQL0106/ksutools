@@ -9,7 +9,7 @@ cd "$HERE"
 	https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p2.tar.gz
 [ -d openssh-9.9p2 ] || tar xzf openssh-9.9p2.tar.gz
 
-docker run --rm -v "$HERE":/work -w /work alpine:3.21 sh -eux -c '
+docker run --rm --platform linux/arm64 -v "$HERE":/work -w /work alpine:3.21 sh -eux -c '
 	apk add --no-cache build-base openssl-dev zlib-dev wget ca-certificates
 
 	# fresh source copy each run
