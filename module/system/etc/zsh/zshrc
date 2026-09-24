@@ -1,0 +1,32 @@
+# ksutools: load oh-my-zsh + enhancement plugins for interactive shells.
+#
+# Opt out by exporting KSUTOOLS_NO_OMZ=1 (e.g. from ~/.zshenv), or reuse an
+# existing oh-my-zsh by setting ZSH/ZSH_CUSTOM before this runs.
+if [[ -o interactive && -z "$KSUTOOLS_NO_OMZ" && -z "$KSUTOOLS_OMZ_LOADED" && -r "$ZSH/oh-my-zsh.sh" ]]; then
+	export KSUTOOLS_OMZ_LOADED=1
+	DISABLE_AUTO_UPDATE=true
+	DISABLE_UPDATE_PROMPT=true
+	ZSH_THEME="${ZSH_THEME:-robbyrussell}"
+
+	plugins=(
+		git
+		sudo
+		extract
+		z
+		colored-man-pages
+		zsh-completions
+		zsh-history-substring-search
+		zsh-autosuggestions
+		zsh-syntax-highlighting
+	)
+
+	source "$ZSH/oh-my-zsh.sh"
+
+	# up/down search history by the current command prefix
+	if (( $+functions[history-substring-search-up] )); then
+		bindkey '^[[A' history-substring-search-up   2>/dev/null
+		bindkey '^[[B' history-substring-search-down 2>/dev/null
+		bindkey '^P'   history-substring-search-up   2>/dev/null
+		bindkey '^N'   history-substring-search-down 2>/dev/null
+	fi
+fi

@@ -1,0 +1,6 @@
+id=ksutools
+name=KSU Tools (musl)
+version=v1.0.0
+versionCode=10000
+author=SQL916
+description=Alpine musl userspace tools for the Android shell: curl rsync jq sqlite3 openssl dig zip bash zsh htop nano vim ssh scp sshd.

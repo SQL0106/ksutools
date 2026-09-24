@@ -1,0 +1,30 @@
+#!/system/bin/sh
+# ksutools launcher: exports musl runtime env, then execs the real binary.
+# Every command in system/bin is a symlink to this file; the tool name is
+# taken from the symlink's basename.
+
+KSUROOT=/system/lib64/ksutools
+name=${0##*/}
+
+export LD_LIBRARY_PATH="$KSUROOT${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export SSL_CERT_FILE=/system/etc/ssl/certs/ca-certificates.crt
+export SSL_CERT_DIR=/system/etc/ssl/certs
+export TERMINFO=/system/etc/terminfo
+export TERMINFO_DIRS=/system/etc/terminfo
+export TMPDIR=/data/local/tmp
+[ -n "$HOME" ] || export HOME=/data/adb/ksutools/home/root
+
+# vim: point at the bundled runtime (syntax, ftplugins, colors).
+if [ "$name" = vim ]; then
+	export VIMRUNTIME=/system/usr/share/vim/vim91
+fi
+
+# sshd: default to our config unless the user passes -f.
+if [ "$name" = sshd ]; then
+	case " $* " in
+		*" -f "*) ;;
+		*) set -- -f /data/adb/ksutools/etc/ssh/sshd_config "$@" ;;
+	esac
+fi
+
+exec "$KSUROOT/$name" "$@"

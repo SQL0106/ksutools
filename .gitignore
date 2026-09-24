@@ -1,0 +1,22 @@
+# build scratch + fetched upstreams
+/build/*
+!/build/fetch-alpine.sh
+!/build/build-sshd.sh
+!/build/assemble.sh
+!/build/assemble-inner.sh
+!/build/fetch-omz.sh
+
+# packaged output
+/ksutools-*.zip
+
+# generated payload (recreated by build/assemble.sh, build-sshd.sh, build/fetch-omz.sh)
+module/system/lib64/ksutools/
+module/system/usr/share/oh-my-zsh/
+module/system/usr/share/zsh/
+module/system/usr/lib/zsh/
+module/system/usr/lib/ossl-modules/
+module/system/usr/share/vim/
+module/system/etc/terminfo/
+module/system/etc/ssl/certs/
+module/system/etc/ssl/openssl.cnf
+module/system/etc/ssh/ssh_config

@@ -1,0 +1,14 @@
+# ksutools: point zsh at the bundled loadable modules and function files.
+module_path=(/system/usr/lib/zsh/5.9 $module_path)
+fpath=(/system/usr/share/zsh/5.9/functions/**/*(/) /system/usr/share/zsh/5.9/functions /system/usr/share/zsh/site-functions $fpath)
+
+# zsh caches (.zcompdump, history) need a writable HOME.
+if [ -z "$HOME" ] || [ ! -w "$HOME" ]; then
+	HOME=/data/adb/ksutools/home/root
+fi
+export HOME
+
+# bundled oh-my-zsh
+export ZSH=/system/usr/share/oh-my-zsh
+export ZSH_CUSTOM=/system/usr/share/oh-my-zsh/custom
+export ZSH_COMPDUMP=/data/adb/ksutools/home/root/.zcompdump

@@ -1,0 +1,25 @@
+# ksutools sshd configuration
+# Edit freely; the launcher passes this file via `sshd -f`.
+# Persistent data lives under /data/adb/ksutools.
+
+Port 8022
+AddressFamily any
+
+HostKey /data/adb/ksutools/etc/ssh/ssh_host_ed25519_key
+PidFile /data/adb/ksutools/var/run/sshd.pid
+
+# Android has no real passwd/root password; authentication is key-only.
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+# UsePAM is unsupported (musl build has no PAM); PAM is effectively off.
+
+X11Forwarding no
+AllowTcpForwarding yes
+PermitTunnel no
+PrintMotd no
+# PrintLastLog removed upstream in OpenSSH 9.9.
+AcceptEnv LANG LC_*
+
+Subsystem sftp internal-sftp
