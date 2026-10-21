@@ -150,6 +150,9 @@ rm -rf openssh-9.9p2 && tar xzf openssh.tar.gz
 	sed -i 's#"/tmp/ssh-XXXXXXXXXXXX"#"/data/local/tmp/ssh-XXXXXXXXXXXX"#' misc.c
 	# Android refuses hard links on some paths (EPERM means unsupported here).
 	sed -i 's#errno == EOPNOTSUPP || errno == ENOSYS#errno == EOPNOTSUPP || errno == ENOSYS || errno == EPERM#' sftp-server.c
+	# NOTE: 不要传 --with-ldflags="-static"：OpenSSH 9.9 的 configure 见到 LDFLAGS 含
+	# -static 会直接 AC_MSG_ERROR（"Static linking is not supported ..."）。
+	# 静态化由全局 CC 包装器 /work/cc-static（exec gcc -static -no-pie）在链接时完成。
 	./configure \
 		--prefix=/system \
 		--sysconfdir=/system/etc/ssh \
@@ -163,7 +166,7 @@ rm -rf openssh-9.9p2 && tar xzf openssh.tar.gz
 		--without-security-key --without-selinux --without-audit \
 		--disable-utmp --disable-wtmp --disable-utmpx --disable-wtmpx \
 		--disable-lastlog --disable-strip \
-		--with-cflags="-O2" --with-ldflags="-static"
+		--with-cflags="-O2"
 	make -j"$JOBS" sshd sshd-session ssh scp sftp ssh-keygen ssh-add ssh-agent ssh-keyscan
 )
 for b in sshd sshd-session ssh scp sftp ssh-keygen ssh-add ssh-agent ssh-keyscan; do
