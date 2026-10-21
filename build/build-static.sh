@@ -35,6 +35,12 @@ fetch() {
 
 # Emit a static binary and fail loudly if it still has an ELF interpreter.
 emit() {
+	[ -f "$1" ] || { echo "FATAL: $1 missing" >&2; exit 1; }
+	# Refuse libtool wrapper scripts: they are shell, not ELF.
+	if [ "$(head -c4 "$1" | od -An -tx1 | tr -d ' \n')" != "7f454c46" ]; then
+		echo "FATAL: $1 is not an ELF binary (libtool wrapper?)" >&2
+		exit 1
+	fi
 	cp "$1" "$OUT/$2"
 	chmod 0755 "$OUT/$2"
 	if readelf -l "$OUT/$2" 2>/dev/null | grep -q 'INTERP'; then
@@ -51,9 +57,11 @@ rm -rf jq-1.7.1 && tar xzf jq.tar.gz
 	cd jq-1.7.1
 	./configure --disable-shared --enable-static --with-oniguruma=builtin \
 		--disable-maintainer-mode CFLAGS="-O2"
-	make -j"$JOBS" LDFLAGS="-static"
+	# jq links through libtool: plain -static is not enough, libtool needs
+	# -all-static to pass -static down to the final compiler invocation.
+	make -j"$JOBS" LDFLAGS="-all-static"
 )
-emit jq-1.7.1/jq jq
+emit jq-1.7.1/.libs/jq jq
 
 # --------------------------------------------------------------- curl 8.14.1
 fetch https://curl.se/download/curl-8.14.1.tar.xz curl.tar.xz
@@ -99,9 +107,13 @@ rm -rf bind-9.18.50 && tar xf bind.tar.xz
 		--without-libxml2 --without-json-c --without-readline \
 		--without-python --disable-linux-caps --without-cmocka \
 		CFLAGS="-O2" LDFLAGS="-static"
+	# dig needs libisc/libdns/libirs/libisccc built first.
+	make -j"$JOBS" -C lib
 	make -j"$JOBS" -C bin/dig
 )
-emit bind-9.18.50/bin/dig/dig dig
+DIG=bind-9.18.50/bin/dig/dig
+[ -f "$DIG" ] || DIG=bind-9.18.50/bin/dig/.libs/dig
+emit "$DIG" dig
 
 # ------------------------------------------------------------- OpenSSH 9.9p2
 fetch https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p2.tar.gz openssh.tar.gz
