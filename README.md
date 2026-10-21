@@ -1,39 +1,85 @@
 # ksutools
 
-KernelSU 模块：为 Android shell 补齐常用工具（Alpine musl 预编译 + 自编译 musl sshd）。
+Static musl userspace tools for the Android shell, shipped as a KernelSU module.
 
-## 工具
+The module only provides `system/` content — mounting is left to a metamodule
+(`meta-overlayfs`, `hybrid-mount`, …).
 
-`curl` `rsync` `jq` `sqlite3` `openssl` `dig` `zip` `bash` `zsh` `htop` `nano` `vim`
-`ssh` `scp` `sshd` `sftp` `ssh-keygen` `ssh-add` `ssh-agent` `ssh-keyscan`
+## Tools
 
-- shell：`bash` / `zsh`（内置 oh-my-zsh + zsh-autosuggestions / zsh-syntax-highlighting / zsh-completions / zsh-history-substring-search）
-- sshd：端口 8022，仅密钥登录，密钥放在 `/data/adb/ksutools/home/root/.ssh/authorized_keys`
+| group | commands |
+|---|---|
+| HTTP | `curl` |
+| JSON | `jq` |
+| DNS | `dig` |
+| capture | `tcpdump` |
+| SSH | `sshd`, `ssh`, `scp`, `sftp`, `ssh-keygen`, `ssh-add`, `ssh-agent`, `ssh-keyscan` |
 
-## 构建
+All of them are **fully static** binaries (musl, no `ld-musl`, no shared
+libraries, no `patchelf`, no `LD_LIBRARY_PATH`).
 
-依赖：Linux 主机 + Docker。生成的 `module/` 内容由脚本产出，不入库。
+### Why static is not optional
+
+`/system/bin` and `/system/lib64` are **separate overlay mounts** on Android.
+A dynamically linked musl binary installed under `/system/bin` needs its
+interpreter from `/system/lib64/ksutools`, which only exists in namespaces that
+can see that particular overlay. From any other namespace (an app's shell,
+another mount namespace, a container) the file is present but `exec` fails with
+`No such file or directory`.
+
+Static binaries carry their own libc, so they run regardless of which overlays
+the caller can see. That is the whole point of this module.
+
+## Installation
+
+1. Flash the zip via KernelSU / Magisk.
+2. Mount the module's `system/` with a metamodule and reboot.
+3. `ssh root@<device>:8022` (key-only).
+
+Commands are symlinks to `.ksutools-wrapper`, which sets `HOME`, `TMPDIR`,
+`SSL_CERT_FILE` and the default `sshd -f` config.
+
+## sshd
+
+- Port **8022**, key-only, host keys generated on first boot.
+- Persistent state: `/data/adb/ksutools`
+  - `etc/ssh/` — host keys and `sshd_config` (seeded from the module on first boot)
+  - `home/root/.ssh/authorized_keys` — public keys allowed to log in
+  - `var/run/` — pid file
+- Bundled `system/etc/ksutools/authorized_keys` is copied in only if the target
+  does not exist yet, so upgrades never overwrite your keys.
+- Markers:
+  - `/data/adb/ksutools/no-autostart-sshd` — do not start sshd at boot
+  - `KEEP_ON_UNINSTALL=1` (env) — keep `/data/adb/ksutools` when uninstalling
+- `resolv.conf` is generated at boot from `dumpsys connectivity` / `getprop` and
+  bind-mounted onto `/system/etc/resolv.conf`, because Android's shell has no
+  `/etc/resolv.conf`.
+
+## Building (GitHub Actions only)
+
+Nothing is built on the host. `build/assemble.sh` runs an arm64 Alpine container
+(QEMU on the runner) and:
+
+- `build/build-static.sh` — downloads upstream sources and compiles
+  `curl 8.14.1`, `jq 1.7.1`, `libpcap 1.10.5` + `tcpdump 4.99.5`,
+  `BIND 9.18.50` (`dig`) and `OpenSSH 9.9p2` with `--disable-shared
+  --enable-static`, then fails if any output still has an ELF interpreter.
+- `build/assemble-inner.sh` — copies the binaries into
+  `module/system/bin/.ksutools/` plus the CA bundle.
 
 ```sh
-bash build/fetch-omz.sh     # 拉取 oh-my-zsh 与插件
-bash build/build-sshd.sh    # 用 Alpine musl 编译 OpenSSH 9.9p2 (sshd/sshd-session/sftp-server)
-bash build/assemble.sh      # 收集工具、依赖库、loader，patchelf，落地 module/
-( cd module && zip -qr9 ../ksutools.zip . )
+bash build/assemble.sh                     # local (needs docker)
+gh workflow run build.yml                  # or just push
 ```
 
-CI（`.github/workflows/build.yml`）在 push / tag / 手动触发时自动执行上述步骤，
-上传 `ksutools-*.zip`；打 tag 时自动创建 Release。
+Tagging `v*` publishes a release asset.
 
-## 安装
+## Notes
 
-刷入 `ksutools-*.zip`（KernelSU / Magisk 模块管理器），重启后直接使用。
-本模块仅提供 `system/` 内容，挂载由 meta-overlayfs 等 metamodule 负责。
-
-## 说明
-
-- 目标：Android 16 / kernel 6.1.x / arm64，页大小 4096。
-- 所有 musl 二进制使用 `/system/lib64/ksutools/ld-musl-aarch64.so.1` 作为解释器。
-- 配置目录 `/data/adb/ksutools`：sshd 主机密钥、`authorized_keys`、`resolv.conf` 等。
-- 卸载保留数据：`touch /data/adb/ksutools/KEEP_ON_UNINSTALL`。
-- 关闭 sshd 自启：`touch /data/adb/ksutools/no-autostart-sshd`。
-- 关闭 oh-my-zsh：在 `~/.zshenv` 中 `export KSUTOOLS_NO_OMZ=1`。
+- Target: Android 16, arm64, kernel 6.1.x. Page size does not matter for static
+  binaries (v1's 4096-byte constraint is gone with the musl loader).
+- Android-specific patches: OpenSSH private temp dirs are moved to
+  `/data/local/tmp`, and `EPERM` from `link()` is treated as "not supported"
+  (Android denies hard links on some paths).
+- No package manager, no automatic upgrades: the versions above are what you
+  get. Rebuild the zip to move forward.

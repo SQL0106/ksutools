@@ -1,6 +1,6 @@
 id=ksutools
-name=KSU Tools (musl)
-version=v1.0.0
-versionCode=10000
+name=KSU Tools (static)
+version=v2.0.0
+versionCode=20000
 author=SQL916
-description=Alpine musl userspace tools for the Android shell: curl rsync jq sqlite3 openssl dig zip bash zsh htop nano vim ssh scp sshd.
+description=Static musl tools for the Android shell: curl jq dig tcpdump + OpenSSH (sshd/ssh/scp/sftp). Every binary is fully static, so it runs in any mount namespace.

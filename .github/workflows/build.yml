@@ -22,17 +22,19 @@ jobs:
       - name: Show toolchain
         run: |
           docker version
-          git --version
           zip --version | head -1
 
-      - name: Vendor oh-my-zsh + plugins
-        run: bash build/fetch-omz.sh
-
-      - name: Build sshd (musl)
-        run: bash build/build-sshd.sh
-
-      - name: Assemble module tree
+      - name: Build static binaries + assemble module
         run: bash build/assemble.sh
+
+      - name: Verify payload is static
+        run: |
+          set -eu
+          for f in module/system/bin/.ksutools/*; do
+            printf '%s: ' "${f##*/}"
+            readelf -l "$f" | grep -q INTERP && { echo "DYNAMIC (bad)"; exit 1; } || echo "static"
+          done
+          ls -l module/system/bin/.ksutools
 
       - name: Package zip
         id: pack
