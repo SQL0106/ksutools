@@ -18,6 +18,7 @@ cd "$SRC"
 
 apk add --no-cache \
 	build-base pkgconf linux-headers ca-certificates wget tar xz perl \
+	flex bison \
 	openssl-dev openssl-libs-static \
 	zlib-dev zlib-static \
 	nghttp2-dev nghttp2-static \
