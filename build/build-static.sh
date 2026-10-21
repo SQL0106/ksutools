@@ -61,7 +61,9 @@ rm -rf jq-1.7.1 && tar xzf jq.tar.gz
 	# -all-static to pass -static down to the final compiler invocation.
 	make -j"$JOBS" LDFLAGS="-all-static"
 )
-emit jq-1.7.1/.libs/jq jq
+JQ=jq-1.7.1/jq
+[ -f jq-1.7.1/.libs/jq ] && JQ=jq-1.7.1/.libs/jq
+emit "$JQ" jq
 
 # --------------------------------------------------------------- curl 8.14.1
 fetch https://curl.se/download/curl-8.14.1.tar.xz curl.tar.xz
@@ -79,7 +81,9 @@ rm -rf curl-8.14.1 && tar xf curl.tar.xz
 	make -j"$JOBS" -C lib
 	make -j"$JOBS" -C src curl
 )
-emit curl-8.14.1/src/curl curl
+CURL=curl-8.14.1/src/curl
+[ -f curl-8.14.1/src/.libs/curl ] && CURL=curl-8.14.1/src/.libs/curl
+emit "$CURL" curl
 
 # ----------------------------------------------------- libpcap + tcpdump
 fetch https://www.tcpdump.org/release/libpcap-1.10.5.tar.gz libpcap.tar.gz
