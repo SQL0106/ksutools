@@ -26,6 +26,22 @@ apk add --no-cache \
 	libuv-dev libuv-static \
 	ncurses-dev
 
+# Force static linking at the compiler-driver level. Several upstream
+# Makefiles (curl's src/Makefile uses $(CURL_LDFLAGS_BIN), not $(LDFLAGS))
+# silently drop -static when it is only passed via LDFLAGS, so we wrap CC:
+# compile-only steps pass through, every link step gets -static -no-pie.
+cat > /work/cc-static <<'WRAP'
+#!/bin/sh
+for a in "$@"; do
+	case "$a" in
+		-c|-E|-S|-M|-MM) exec gcc "$@" ;;
+	esac
+done
+exec gcc -static -no-pie "$@"
+WRAP
+chmod +x /work/cc-static
+export CC=/work/cc-static
+
 fetch() {
 	# fetch <url> <outfile>; skip if already present
 	[ -s "$2" ] && return 0
