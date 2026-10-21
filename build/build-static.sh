@@ -45,6 +45,7 @@ emit() {
 	chmod 0755 "$OUT/$2"
 	if readelf -l "$OUT/$2" 2>/dev/null | grep -q 'INTERP'; then
 		echo "FATAL: $2 is dynamically linked" >&2
+		readelf -l "$OUT/$2" | sed -n '1,25p' >&2
 		exit 1
 	fi
 	echo "static: $2 ($(wc -c <"$OUT/$2") bytes)"
@@ -79,7 +80,9 @@ rm -rf curl-8.14.1 && tar xf curl.tar.xz
 		--disable-manual --disable-docs --disable-debug \
 		CFLAGS="-O2" LDFLAGS="-static"
 	make -j"$JOBS" -C lib
-	make -j"$JOBS" -C src curl
+	# Command-line LDFLAGS wins over the recorded ones; curl's own makefile
+	# otherwise drops -static for the src/ link.
+	make -j"$JOBS" -C src curl LDFLAGS="-static -no-pie"
 )
 CURL=curl-8.14.1/src/curl
 [ -f curl-8.14.1/src/.libs/curl ] && CURL=curl-8.14.1/src/.libs/curl
@@ -98,7 +101,7 @@ rm -rf tcpdump-4.99.5 && tar xzf tcpdump.tar.gz
 (
 	cd tcpdump-4.99.5
 	./configure --prefix=/usr CFLAGS="-O2" LDFLAGS="-static"
-	make -j"$JOBS"
+	make -j"$JOBS" LDFLAGS="-static -no-pie"
 )
 emit tcpdump-4.99.5/tcpdump tcpdump
 
@@ -113,7 +116,8 @@ rm -rf bind-9.18.50 && tar xf bind.tar.xz
 		CFLAGS="-O2" LDFLAGS="-static"
 	# dig needs libisc/libdns/libirs/libisccc built first.
 	make -j"$JOBS" -C lib
-	make -j"$JOBS" -C bin/dig
+	# libtool links dig: -all-static is required to reach the compiler.
+	make -j"$JOBS" -C bin/dig LDFLAGS="-all-static"
 )
 DIG=bind-9.18.50/bin/dig/dig
 [ -f "$DIG" ] || DIG=bind-9.18.50/bin/dig/.libs/dig
