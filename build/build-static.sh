@@ -21,7 +21,6 @@ apk add --no-cache \
 	openssl-dev openssl-libs-static \
 	zlib-dev zlib-static \
 	nghttp2-dev nghttp2-static \
-	brotli-dev brotli-static \
 	zstd-dev zstd-static \
 	libuv-dev libuv-static \
 	ncurses-dev
@@ -88,7 +87,7 @@ rm -rf curl-8.14.1 && tar xf curl.tar.xz
 (
 	cd curl-8.14.1
 	./configure --disable-shared --enable-static \
-		--with-openssl --with-zlib --with-nghttp2 --with-brotli --with-zstd \
+		--with-openssl --with-zlib --with-nghttp2 --with-zstd \
 		--without-libpsl --without-libidn2 \
 		--with-ca-bundle=/system/etc/ssl/certs/ca-certificates.crt \
 		--without-ca-path --enable-ipv6 \
