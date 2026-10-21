@@ -10,3 +10,7 @@
 # generated payload (recreated by build/assemble.sh)
 module/system/bin/.ksutools/
 module/system/etc/ssl/certs/
+
+# 本地工作状态/日志（只跟踪 STATE.md）
+.agent/*.log
+.agent/tmp/
