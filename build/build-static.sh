@@ -185,10 +185,16 @@ build_libuv() {
 	(
 		cd libuv-v1.48.0
 		if [ "${LIBUV_DISABLE_IO_URING:-0}" = "1" ]; then
-			# Make the syscall wrapper itself bogus: every io_uring_setup()
-			# returns -ENOSYS, so libuv takes its normal epoll fallback path.
-			sed -i 's|__NR_io_uring_setup|(-1L)|g' src/unix/linux.c
-			grep -c '(-1L)' src/unix/linux.c || true
+			# Patch only the syscall call site, NOT the __NR_io_uring_setup
+			# macro: rewriting the macro name breaks libuv's own
+			# `#ifndef __NR_io_uring_setup` block into `#ifndef (-1L)`.
+			# syscall(-1, ...) returns -1/ENOSYS, which uv__iou_init()
+			# treats as "no io_uring" and it silently falls back to epoll.
+			sed -i 's|return syscall(__NR_io_uring_setup, entries, params);|return syscall(-1L, entries, params);|' src/unix/linux.c
+			grep -q 'syscall(-1L, entries, params)' src/unix/linux.c || {
+				echo "FATAL: io_uring call site not patched (upstream changed?)" >&2
+				exit 1
+			}
 		fi
 		# libuv no longer ships autotools output in its release tarballs
 		# (there is no ./configure in libuv-v1.48.0.tar.gz), so build the
