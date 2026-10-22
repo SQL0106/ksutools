@@ -104,16 +104,39 @@ module/
 | 3 | fail | curl 动态链接 | 加 `-no-pie`、命令行 LDFLAGS |
 | 4 | fail | curl 仍动态（有 INTERP） | 根因：curl Makefile 不读 LDFLAGS → **CC 包装器** |
 | 5 | fail | brotli 未定义符号 | Alpine `brotli-static` 缺 `libbrotlicommon.a` → **放弃 brotli** |
-| 6 | 进行中 | — | run 39690286241 |
+| 6 | fail | libpcap configure：`Neither flex nor lex was found` | apk add `flex bison` |
+| 7 | fail | BIND configure：`Static linking is not supported ...` | 先误判为 OpenSSH，删 openssh 的 `--with-ldflags=-static` |
+| 8 | fail | 同一条错误仍在 | 靠 stage 顺序定位到 **BIND**，去掉它的 `LDFLAGS=-static` |
+| 9 | fail | 仍同一条 | 日志真相：`whether a statically linked program can dlopen itself... no` |
+| 10 | fail | 仍同一条 | **根因：BIND configure.ac 硬禁静态构建** |
+| 11 | 进行中 | — | sed 掉 configure 里那条 `as_fn_error` 再编 |
+
+**BIND 那条错误的真正成因（2026-10-22 定论，别再误判为 OpenSSH/ldflags）：**
+```m4
+AS_IF([test "$enable_static" != "no" && test "$enable_developer" != "yes"],
+      [AC_MSG_ERROR([Static linking is not supported as it disables dlopen() ...])])
+```
+BIND 9.18 明确**不允许**静态构建（因为它把 `dlopen` 当作安全特性）。唯一官方开关是
+`--enable-developer`，但那个开关会连带打开 `-Werror` + 内存跟踪 + cmocka，更脆。
+所以做法：解压后先
+`sed -i 's|as_fn_error \$? "Static linking is not supported.*|:|' configure`
+把那条 error 改成 no-op（`configure` 仍是合法 sh，`sh -n` 验过），然后照常
+`CC=gcc ... ./configure --disable-shared --enable-static`，只在
+`make -C bin/dig` 时给 `LDFLAGS="-all-static"`。
+dig 本身不用 `dlopen`，静态无功能损失。
 
 调试技巧：`--log-failed` 常返回空，用
-`JID=$(gh run view <id> --json jobs -q '.jobs[0].databaseId'); gh api "repos/SQL0106/ksutools/actions/jobs/$JID/logs" | tail -40`
+`JID=$(gh run view <id> --json jobs -q '.jobs[0].databaseId'); gh api "repos/SQL0106/ksutools/actions/jobs/$JID/logs" > .agent/last.log`
+再用 `grep -n "===== STAGE" .agent/last.log | tail -3` 定位在哪个项目挂的
+（`stage()` 分别打 jq / curl / libpcap-tcpdump / bind-dig / openssh）。
 
 ## 7. 当前状态
 
-- 分支 `main`，最新 commit：`fix(ci): 去掉 brotli（Alpine brotli-static 缺 libbrotlicommon.a），保留 zlib/zstd/nghttp2/openssl`
-- **CI run 39690286241 in_progress**，后台轮询已启动，日志 `~/ksutools/.agent/ci-watch.log`（每分钟一行状态，完成后自动通知）。
+- 分支 `main`，最新 commit：`fix(ci): BIND 的 configure 里硬禁静态构建，sed 掉那条 as_fn_error 再编`
+- **CI run 已启动**（head `5cf7a44`），后台轮询写 `~/ksutools/.agent/ci-watch.log`（每分钟一行，完成后自动通知；**勿主动轮询**）。
+- 已通过的项目：jq、curl、libpcap、tcpdump；**BIND 未验证成功**；OpenSSH 尚未跑到（下一个风险点：它的 configure 若做 dlopen 探测会同样报错，处理方式相同：configure 用普通 gcc，链接阶段 `-all-static`/`-static`）。
 - `module/` 只有 288K 纯脚本+配置；`sh -n` / `bash -n` 全通过。
+- `.agent/verify-device.sh` 已就绪（真机 8 项检查，输出 `RESULT: ALL PASS`）。
 
 ## 8. 下一步（CI 绿了之后）
 
