@@ -67,6 +67,12 @@ emit() {
 		readelf -l "$OUT/$2" | sed -n '1,25p' >&2
 		exit 1
 	fi
+	# Static + unstripped is huge (OpenSSH ~15MB each). Strip; keeps ELF static.
+	strip --strip-all "$OUT/$2" 2>/dev/null || true
+	if readelf -l "$OUT/$2" 2>/dev/null | grep -q 'INTERP'; then
+		echo "FATAL: $2 became dynamic after strip" >&2
+		exit 1
+	fi
 	echo "static: $2 ($(wc -c <"$OUT/$2") bytes)"
 }
 
