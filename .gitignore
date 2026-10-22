@@ -16,5 +16,10 @@ module/system/etc/ssl/certs/
 .agent/*.log.new
 .agent/tmp/
 .agent/art*/
+.agent/bind*
+.agent/dbg*/
+.agent/dig.strace
+.agent/libuv-linux.c
+.agent/trampoline.c
 .agent/libc.so
 .agent/linker64
