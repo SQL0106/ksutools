@@ -135,9 +135,16 @@ rm -rf bind-9.18.50 && tar xf bind.tar.xz
 	cd bind-9.18.50
 	# NOTE: BIND 的 configure 不能看见 -static，也不能用静态 CC 包装器：
 	# 它的 libtool 探测会链接一个 dlopen 测试程序（"whether a program can dlopen
-	# itself"），静态链接下必然失败，随后直接 AC_MSG_ERROR
-	# （"... disables dlopen() ... RELRO, ASLR"）。
-	# 所以这里用普通 gcc 做 configure/编译，只在 make 链接阶段加 -all-static。
+	# itself"），静态链接下必然失败。所以这里用普通 gcc 做 configure/编译，
+	# 只在 make 链接阶段加 -all-static。
+	#
+	# 但光这样还不够：BIND 的 configure.ac 里有一条显式禁令——
+	#   AS_IF([test "$enable_static" != "no" && test "$enable_developer" != "yes"],
+	#         [AC_MSG_ERROR([Static linking is not supported ...])])
+	# 也就是说它**根本不允许**静态构建（dig 其实不需要 dlopen）。
+	# 唯一绕过开关是 --enable-developer，但那会连带打开 -Werror、内存跟踪等，
+	# 反而更脆。所以直接把生成的 configure 里那行 as_fn_error 改成 no-op。
+	sed -i 's|as_fn_error \$? "Static linking is not supported.*|:|' configure
 	CC=gcc CFLAGS="-O2" ./configure --prefix=/usr --disable-shared --enable-static \
 		--without-libxml2 --without-json-c --without-readline \
 		--without-python --disable-linux-caps --without-cmocka
