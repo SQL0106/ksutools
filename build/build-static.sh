@@ -151,9 +151,13 @@ rm -rf bind-9.18.50 && tar xf bind.tar.xz
 	# 唯一绕过开关是 --enable-developer，但那会连带打开 -Werror、内存跟踪等，
 	# 反而更脆。所以直接把生成的 configure 里那行 as_fn_error 改成 no-op。
 	sed -i 's|as_fn_error \$? "Static linking is not supported.*|:|' configure
+	# NOTE: --without-jemalloc 是必须的。BIND 9.18 默认链自带 jemalloc
+	# （strings dig 会看到 jemalloc_shim.h），在 musl 静态链接下 jemalloc 会在
+	# 启动期 segfault（rc=139，与参数无关）。Alpine 官方打包 BIND 也关它。
 	CC=gcc CFLAGS="-O2" ./configure --prefix=/usr --disable-shared --enable-static \
 		--without-libxml2 --without-json-c --without-readline \
-		--without-python --disable-linux-caps --without-cmocka
+		--without-python --disable-linux-caps --without-cmocka \
+		--without-jemalloc
 	# dig needs libisc/libdns/libirs/libisccc built first.
 	make -j"$JOBS" -C lib CC=gcc
 	# libtool links dig: -all-static is required to reach the compiler.
