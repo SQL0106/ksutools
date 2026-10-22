@@ -197,18 +197,28 @@ build_libuv() {
 			}
 		fi
 		# libuv no longer ships autotools output in its release tarballs
-		# (there is no ./configure in libuv-v1.48.0.tar.gz), so build the
-		# static archive with cmake. Do NOT use `cmake --install`: the static
-		# target installs as libuv_a.a, which would break `-luv` lookups for
-		# BIND. Copy the archive to /usr/lib/libuv.a by hand instead; uv.h and
-		# uv/*.h already come from Alpine's libuv-dev.
+		# (there is no ./configure in libuv-v1.48.0.tar.gz), so build with
+		# cmake. libuv's CMakeLists always creates both targets: shared `uv`
+		# and static `uv_a` (BUILD_SHARED_LIBS has no effect). The static
+		# archive is emitted as cb/libuv.a (the target's OUTPUT_NAME is uv).
+		# Do NOT use `cmake --install`: it would install the archive as
+		# libuv_a.a and break `-luv` lookups for BIND, so copy it by hand.
 		apk add --no-cache cmake
 		cmake -S . -B cb -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 			-DCMAKE_C_FLAGS="${LIBUV_CFLAGS:--O2}" \
-			-DBUILD_SHARED_LIBS=OFF -DLIBUV_BUILD_TESTS=OFF
+			-DLIBUV_BUILD_TESTS=OFF
 		cmake --build cb -j"$JOBS"
-		cp cb/libuv_a.a /usr/lib/libuv.a
+		# Archive name differs across libuv versions: check both, and fail
+		# loudly if neither exists.
+		for a in cb/libuv.a cb/libuv_a.a; do
+			[ -f "$a" ] && { cp "$a" /usr/lib/libuv.a; break; }
+		done
+		[ -f /usr/lib/libuv.a ] || { echo "FATAL: no static libuv archive in cb/" >&2; ls -l cb/*.a cb/*.so 2>/dev/null >&2; exit 1; }
 		ranlib /usr/lib/libuv.a
+		# Headers must match the library we just built (Alpine's libuv-dev
+		# may be a different version -> struct layout mismatch at runtime).
+		cp include/uv.h /usr/include/uv.h
+		cp -f include/uv/*.h /usr/include/uv/
 		ls -l /usr/lib/libuv.a
 	)
 }
