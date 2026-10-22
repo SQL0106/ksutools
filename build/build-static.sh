@@ -49,6 +49,9 @@ fetch() {
 	mv "$2.part" "$2"
 }
 
+# stage markers: make CI failures attributable at a glance
+stage() { echo "===== STAGE: $* ====="; }
+
 # Emit a static binary and fail loudly if it still has an ELF interpreter.
 emit() {
 	[ -f "$1" ] || { echo "FATAL: $1 missing" >&2; exit 1; }
@@ -68,6 +71,7 @@ emit() {
 }
 
 # ---------------------------------------------------------------- jq 1.7.1
+stage jq
 fetch https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-1.7.1.tar.gz jq.tar.gz
 rm -rf jq-1.7.1 && tar xzf jq.tar.gz
 (
@@ -83,6 +87,7 @@ JQ=jq-1.7.1/jq
 emit "$JQ" jq
 
 # --------------------------------------------------------------- curl 8.14.1
+stage curl
 fetch https://curl.se/download/curl-8.14.1.tar.xz curl.tar.xz
 rm -rf curl-8.14.1 && tar xf curl.tar.xz
 (
@@ -105,6 +110,7 @@ CURL=curl-8.14.1/src/curl
 emit "$CURL" curl
 
 # ----------------------------------------------------- libpcap + tcpdump
+stage libpcap-tcpdump
 fetch https://www.tcpdump.org/release/libpcap-1.10.5.tar.gz libpcap.tar.gz
 rm -rf libpcap-1.10.5 && tar xzf libpcap.tar.gz
 (
@@ -122,27 +128,30 @@ rm -rf tcpdump-4.99.5 && tar xzf tcpdump.tar.gz
 emit tcpdump-4.99.5/tcpdump tcpdump
 
 # ----------------------------------------------------------------- BIND (dig)
+stage bind-dig
 fetch https://downloads.isc.org/isc/bind9/9.18.50/bind-9.18.50.tar.xz bind.tar.xz
 rm -rf bind-9.18.50 && tar xf bind.tar.xz
 (
 	cd bind-9.18.50
-	./configure --prefix=/usr --disable-shared --enable-static \
+	# NOTE: BIND 的 configure 不能看见 -static，也不能用静态 CC 包装器：
+	# 它的 libtool 探测会链接一个 dlopen 测试程序（"whether a program can dlopen
+	# itself"），静态链接下必然失败，随后直接 AC_MSG_ERROR
+	# （"... disables dlopen() ... RELRO, ASLR"）。
+	# 所以这里用普通 gcc 做 configure/编译，只在 make 链接阶段加 -all-static。
+	CC=gcc CFLAGS="-O2" ./configure --prefix=/usr --disable-shared --enable-static \
 		--without-libxml2 --without-json-c --without-readline \
-		--without-python --disable-linux-caps --without-cmocka \
-		CFLAGS="-O2"
-	# NOTE: 不要在 configure 里传 LDFLAGS="-static"！BIND 9.18 的 configure 见到
-	# LDFLAGS 含 -static 就直接 AC_MSG_ERROR（"... disables dlopen() ... RELRO, ASLR"）。
-	# 静态链接由全局 CC 包装器 /work/cc-static 在链接阶段注入。
+		--without-python --disable-linux-caps --without-cmocka
 	# dig needs libisc/libdns/libirs/libisccc built first.
-	make -j"$JOBS" -C lib
+	make -j"$JOBS" -C lib CC=gcc
 	# libtool links dig: -all-static is required to reach the compiler.
-	make -j"$JOBS" -C bin/dig LDFLAGS="-all-static"
+	make -j"$JOBS" -C bin/dig CC=gcc LDFLAGS="-all-static"
 )
 DIG=bind-9.18.50/bin/dig/dig
 [ -f "$DIG" ] || DIG=bind-9.18.50/bin/dig/.libs/dig
 emit "$DIG" dig
 
 # ------------------------------------------------------------- OpenSSH 9.9p2
+stage openssh
 fetch https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p2.tar.gz openssh.tar.gz
 rm -rf openssh-9.9p2 && tar xzf openssh.tar.gz
 (
