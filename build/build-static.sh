@@ -129,7 +129,10 @@ rm -rf bind-9.18.50 && tar xf bind.tar.xz
 	./configure --prefix=/usr --disable-shared --enable-static \
 		--without-libxml2 --without-json-c --without-readline \
 		--without-python --disable-linux-caps --without-cmocka \
-		CFLAGS="-O2" LDFLAGS="-static"
+		CFLAGS="-O2"
+	# NOTE: 不要在 configure 里传 LDFLAGS="-static"！BIND 9.18 的 configure 见到
+	# LDFLAGS 含 -static 就直接 AC_MSG_ERROR（"... disables dlopen() ... RELRO, ASLR"）。
+	# 静态链接由全局 CC 包装器 /work/cc-static 在链接阶段注入。
 	# dig needs libisc/libdns/libirs/libisccc built first.
 	make -j"$JOBS" -C lib
 	# libtool links dig: -all-static is required to reach the compiler.
