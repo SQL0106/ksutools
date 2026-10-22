@@ -18,5 +18,10 @@ exec docker run --rm \
 	--platform linux/arm64 \
 	-v "$HERE:/work" \
 	-e "JOBS=${JOBS:-}" \
+	-e "NO_STRIP=${NO_STRIP:-}" \
+	-e "DIG_CFLAGS=${DIG_CFLAGS:-}" \
+	-e "LIBUV_FROM_SOURCE=${LIBUV_FROM_SOURCE:-}" \
+	-e "LIBUV_CFLAGS=${LIBUV_CFLAGS:-}" \
+	-e "LIBUV_DISABLE_IO_URING=${LIBUV_DISABLE_IO_URING:-}" \
 	alpine:3.21 \
 	sh -eux /work/build-static.sh "$GROUP"

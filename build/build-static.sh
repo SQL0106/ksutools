@@ -94,7 +94,12 @@ emit() {
 		exit 1
 	fi
 	# Static + unstripped is huge (OpenSSH ~15MB each). Strip; keeps ELF static.
-	strip --strip-all "$OUT/$2" 2>/dev/null || true
+	# NO_STRIP=1 keeps symbols for post-mortem debugging (dig-debug.yml).
+	if [ "${NO_STRIP:-0}" = "1" ]; then
+		echo "keeping symbols: $2"
+	else
+		strip --strip-all "$OUT/$2" 2>/dev/null || true
+	fi
 	if readelf -l "$OUT/$2" 2>/dev/null | grep -q 'INTERP'; then
 		echo "FATAL: $2 became dynamic after strip" >&2
 		exit 1
@@ -168,9 +173,36 @@ build_tcpdump() {
 	emit tcpdump-4.99.5/tcpdump tcpdump
 }
 
+# ---------------------------------------------------------------- libuv
+# Alpine's libuv-static is the default. LIBUV_FROM_SOURCE=1 builds it here
+# instead, which we need to (a) get debug symbols on Linux and (b) kill the
+# io_uring backend: on Android kernels io_uring_setup() succeeds and libuv
+# then crashes with a NULL+8 dereference, which takes BIND's dig down with it.
+build_libuv() {
+	stage libuv-from-source
+	fetch https://dist.libuv.org/dist/v1.48.0/libuv-v1.48.0.tar.gz libuv.tar.gz
+	rm -rf libuv-v1.48.0 && tar xzf libuv.tar.gz
+	(
+		cd libuv-v1.48.0
+		if [ "${LIBUV_DISABLE_IO_URING:-0}" = "1" ]; then
+			# Make the syscall wrapper itself bogus: every io_uring_setup()
+			# returns -ENOSYS, so libuv takes its normal epoll fallback path.
+			sed -i 's|__NR_io_uring_setup|(-1L)|g' src/unix/linux.c
+			grep -c '(-1L)' src/unix/linux.c || true
+		fi
+		./configure --prefix=/usr --disable-shared --enable-static \
+			CFLAGS="${LIBUV_CFLAGS:--O2}"
+		make -j"$JOBS"
+		make install
+	)
+}
+
 # ----------------------------------------------------------------- BIND (dig)
 build_dig() {
 	stage bind-dig
+	if [ "${LIBUV_FROM_SOURCE:-0}" = "1" ]; then
+		build_libuv
+	fi
 	fetch https://downloads.isc.org/isc/bind9/9.18.50/bind-9.18.50.tar.xz bind.tar.xz
 	rm -rf bind-9.18.50 && tar xf bind.tar.xz
 	(
@@ -190,7 +222,7 @@ build_dig() {
 		# NOTE: --without-jemalloc 是必须的。BIND 9.18 默认链自带 jemalloc
 		# （strings dig 会看到 jemalloc_shim.h），在 musl 静态链接下 jemalloc 会在
 		# 启动期 segfault（rc=139，与参数无关）。Alpine 官方打包 BIND 也关它。
-		CC=/work/cc-plain CFLAGS="-O2" ./configure --prefix=/usr --disable-shared --enable-static \
+		CC=/work/cc-plain CFLAGS="${DIG_CFLAGS:--O2}" ./configure --prefix=/usr --disable-shared --enable-static \
 			--without-libxml2 --without-json-c --without-readline \
 			--without-python --disable-linux-caps --without-cmocka \
 			--without-jemalloc

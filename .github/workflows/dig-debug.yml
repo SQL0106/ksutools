@@ -1,0 +1,43 @@
+name: dig-debug
+
+# One-off debug build: unstripped dig (-O0 -g) plus a from-source libuv with
+# the io_uring backend disabled. Used to pinpoint the static dig SIGSEGV.
+on:
+  workflow_dispatch:
+    inputs:
+      libuv_disable_io_uring:
+        description: 'pkill io_uring in libuv (1/0)'
+        default: '1'
+      no_strip:
+        description: 'keep symbols (1/0)'
+        default: '1'
+
+permissions:
+  contents: read
+
+jobs:
+  dig-debug:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dig with symbols
+        env:
+          NO_STRIP: ${{ inputs.no_strip }}
+          DIG_CFLAGS: '-O0 -g -fno-omit-frame-pointer'
+          LIBUV_FROM_SOURCE: '1'
+          LIBUV_CFLAGS: '-O0 -g -fno-omit-frame-pointer'
+          LIBUV_DISABLE_IO_URING: ${{ inputs.libuv_disable_io_uring }}
+        run: bash build/assemble.sh bind
+
+      - name: Show result
+        run: |
+          ls -l build/static-out
+          file build/static-out/dig
+          nm build/static-out/dig 2>/dev/null | wc -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dig-debug
+          path: build/static-out/dig
+          if-no-files-found: error
