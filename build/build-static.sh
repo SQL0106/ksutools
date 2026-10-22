@@ -255,7 +255,15 @@ build_dig() {
 		# dig needs libisc/libdns/libirs/libisccc built first.
 		make -j"$JOBS" -C lib CC=/work/cc-plain
 		# libtool links dig: -all-static is required to reach the compiler.
-		make -j"$JOBS" -C bin/dig CC=/work/cc-plain LDFLAGS="-all-static"
+		#
+		# --undefined=isc__initialize 是**必须的**，不是保险措施：
+		# lib/isc/lib.c 里 isc__initialize() 是 __attribute__((constructor))，
+		# 由 .init_array 自动调用、没有任何正常调用者引用它。静态归档下
+		# 链接器只抽取被引用的 .o，于是 lib.o 整个被丢弃 -> constructor 不执行
+		# -> trampolines 保持 NULL -> isc__trampoline_get() 读 NULL+8 -> SIGSEGV
+		# (si_addr=0x8)。动态 libisc.so 因为整库加载所以从未暴露此问题。
+		make -j"$JOBS" -C bin/dig CC=/work/cc-plain \
+			LDFLAGS="-all-static -Wl,--undefined=isc__initialize ${DIG_LDFLAGS:-}"
 	)
 	DIG=bind-9.18.50/bin/dig/dig
 	[ -f "$DIG" ] || DIG=bind-9.18.50/bin/dig/.libs/dig
