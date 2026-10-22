@@ -190,10 +190,20 @@ build_libuv() {
 			sed -i 's|__NR_io_uring_setup|(-1L)|g' src/unix/linux.c
 			grep -c '(-1L)' src/unix/linux.c || true
 		fi
-		./configure --prefix=/usr --disable-shared --enable-static \
-			CFLAGS="${LIBUV_CFLAGS:--O2}"
-		make -j"$JOBS"
-		make install
+		# libuv no longer ships autotools output in its release tarballs
+		# (there is no ./configure in libuv-v1.48.0.tar.gz), so build the
+		# static archive with cmake. Do NOT use `cmake --install`: the static
+		# target installs as libuv_a.a, which would break `-luv` lookups for
+		# BIND. Copy the archive to /usr/lib/libuv.a by hand instead; uv.h and
+		# uv/*.h already come from Alpine's libuv-dev.
+		apk add --no-cache cmake
+		cmake -S . -B cb -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+			-DCMAKE_C_FLAGS="${LIBUV_CFLAGS:--O2}" \
+			-DBUILD_SHARED_LIBS=OFF -DLIBUV_BUILD_TESTS=OFF
+		cmake --build cb -j"$JOBS"
+		cp cb/libuv_a.a /usr/lib/libuv.a
+		ranlib /usr/lib/libuv.a
+		ls -l /usr/lib/libuv.a
 	)
 }
 
