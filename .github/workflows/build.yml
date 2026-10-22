@@ -1,9 +1,9 @@
-name: Build module zip
+name: build
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -11,40 +11,83 @@ permissions:
   contents: write
 
 jobs:
+  # Three independent build groups run in parallel on native arm64 runners
+  # (no QEMU emulation) and share a persisted ccache. Wall time = slowest
+  # group instead of the sum of all five upstream projects.
   build:
-    runs-on: ubuntu-latest
+    name: build-${{ matrix.group }}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, bind, openssh]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Show toolchain
+      - name: Runner info
         run: |
-          docker version
-          zip --version | head -1
+          uname -m
+          nproc
+          docker version --format '{{.Server.Version}}'
 
-      - name: Build static binaries + assemble module
-        run: bash build/assemble.sh
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: build/.ccache
+          key: ccache-${{ matrix.group }}-${{ hashFiles('build/build-static.sh') }}
+          restore-keys: |
+            ccache-${{ matrix.group }}-
+            ccache-
+
+      - name: Build ${{ matrix.group }}
+        run: bash build/assemble.sh ${{ matrix.group }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: static-${{ matrix.group }}
+          path: build/static-out/*
+          if-no-files-found: error
+
+  package:
+    name: package
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: static-*
+          merge-multiple: true
+          path: build/art
+
+      - name: Stage artifacts
+        run: |
+          mkdir -p build/static-out
+          cp -f build/art/* build/static-out/
+          ls -l build/static-out
+
+      - name: Assemble module payload
+        run: bash build/package.sh
 
       - name: Verify payload is static
         run: |
-          set -eu
+          fail=0
           for f in module/system/bin/.ksutools/*; do
-            printf '%s: ' "${f##*/}"
-            readelf -l "$f" | grep -q INTERP && { echo "DYNAMIC (bad)"; exit 1; } || echo "static"
+            if readelf -l "$f" | grep -q INTERP; then
+              echo "::error::$f is dynamically linked"
+              fail=1
+            fi
           done
-          ls -l module/system/bin/.ksutools
+          exit "$fail"
 
       - name: Package zip
-        id: pack
+        id: zip
         run: |
-          version="$(sed -n 's/^version=//p' module/module.prop)"
-          [ -n "$version" ] || version="dev-${GITHUB_SHA::7}"
-          name="ksutools-${version}.zip"
-          ( cd module && zip -qr9 "../${name}" . )
-          echo "archive=${name}" >> "$GITHUB_OUTPUT"
-          ls -l "$name"
+          version=$(sed -n 's/^version=//p' module/module.prop)
+          ( cd module && zip -qr9 "../ksutools-${version}.zip" . )
+          echo "archive=ksutools-${version}.zip" >> "$GITHUB_OUTPUT"
+          ls -l ksutools-*.zip
 
       - uses: actions/upload-artifact@v4
         with:
@@ -52,8 +95,8 @@ jobs:
           path: ksutools-*.zip
           if-no-files-found: error
 
-      - name: Publish release asset
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ksutools-*.zip

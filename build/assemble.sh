@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Host entry point: build everything inside an arm64 Alpine container.
-# No native build on the host, no cross toolchain, no QEMU-only surprises.
+# Host entry point: run one build group inside an arm64 Alpine container.
+#
+# Usage: bash build/assemble.sh [all|core|bind|openssh]
+#
+# On an arm64 runner (ubuntu-24.04-arm) the container runs natively; --platform
+# is kept so the same script still works on x86 hosts (slowly, via binfmt).
+# Output lands in build/static-out/ (host-visible via the bind mount).
+# Copying into module/ is package.sh's job.
 set -euo pipefail
 
+GROUP="${1:-all}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-MOD="$(cd "$HERE/.." && pwd)/module"
 
-mkdir -p "$MOD/system/bin/.ksutools" "$MOD/system/etc/ssl/certs" "$MOD/system/etc/ssh"
+mkdir -p "$HERE/static-out" "$HERE/.ccache"
 
 exec docker run --rm \
 	--platform linux/arm64 \
 	-v "$HERE:/work" \
-	-v "$MOD:/mod" \
+	-e "JOBS=${JOBS:-}" \
 	alpine:3.21 \
-	sh -eux /work/assemble-inner.sh
+	sh -eux /work/build-static.sh "$GROUP"
