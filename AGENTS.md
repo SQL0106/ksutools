@@ -17,7 +17,7 @@
 - `.agent/verify-device.sh`：设备侧验收脚本，要求 `RESULT: ALL PASS`。
 - `ksutools-v1.0.0.zip`：v1 遗留产物。
 
-## 构建（**本机不编译，会掉电**）
+## 构建（**不在本机编译，统一走 CI**）
 - CI：`.github/workflows/build.yml`，`runs-on: ubuntu-24.04-arm` + ccache + 三组 matrix：`core`(jq/curl/tcpdump) / `bind`(dig) / `openssh`，末尾 `package` job 汇总验静态并打包。一轮约 2 分钟。
 - 触发：`gh workflow run build.yml --ref main`；查结果 `gh run list -R SQL0106/ksutools`、日志 `gh run view --log`。
 - 调试：`.github/workflows/dig-debug.yml`（带符号二进制）。

@@ -241,7 +241,7 @@ BIND 9.18 明确**不允许**静态构建（因为它把 `dlopen` 当作安全�
 
 - 升级二进制：改 `build/build-static.sh` → push → CI 出包（~2 分钟）→ 下载 artifact →
   `scp` 到手机 → `/data/adb/ksu/bin/ksud module install <zip>` → 重启 → 跑 `verify-device.sh`。
-- 仓库内不能本地编译（这台 aarch64 主机负载一高就硬断电），**CI 是唯一构建环境**。
+- 仓库内不本地编译（**CI 是唯一构建环境**）；历史上的「负载一高就硬断电」已于 2026-11-07 修复（SMB5 充电驱动看门狗基址 bug，满载实测无复位）。
 - 调 dig 一类疑难问题：`gh workflow run dig-debug.yml --ref main`，出带符号二进制后在**本机直接跑 +
   gdb/strace**（本机也是 aarch64，产物可直接执行），不必上手机。
 
